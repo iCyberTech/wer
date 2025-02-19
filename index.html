@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WeOne Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background-color: #f4f4f4;
+    }
+    #chat-container {
+      width: 90%;
+      max-width: 600px;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    #messages {
+      height: 300px;
+      overflow-y: auto;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 20px;
+      background: #f9f9f9;
+    }
+    #messages div {
+      margin-bottom: 10px;
+      padding: 8px;
+      border-radius: 4px;
+      background: #e1f5fe;
+    }
+    #message-form {
+      display: flex;
+      gap: 10px;
+    }
+    #message-input {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    #send-button {
+      padding: 10px 20px;
+      background: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #send-button:hover {
+      background: #0056b3;
+    }
+    #typing-indicator {
+      font-size: 0.9em;
+      color: #888;
+      margin-top: -10px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div id="chat-container">
+    <div id="messages"></div>
+    <div id="typing-indicator"></div>
+    <form id="message-form">
+      <input type="text" id="message-input" placeholder="Type your message..." required />
+      <button type="submit" id="send-button">Send</button>
+      <button type="button" id="emoji-button">😀</button>
+      <input type="file" id="file-input" style="display: none;" />
+    </form>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
+    import { getDatabase, ref, push, onValue, set, update, remove } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
+    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-storage.js";
+    import EmojiButton from "https://cdn.jsdelivr.net/npm/@joeattardi/emoji-button@4.6.2/dist/index.min.js";
+
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyAQLUzYqaCaFMV74_dmqC2scBJgi0I-rVw",
+      authDomain: "weone-chat-b8ee9.firebaseapp.com",
+      projectId: "weone-chat-b8ee9",
+      storageBucket: "weone-chat-b8ee9.appspot.com",
+      messagingSenderId: "483592524796",
+      appId: "1:483592524796:web:2ec0588f944b1795b99879",
+      measurementId: "G-BTDVK6Z04W",
+      databaseURL: "https://weone-chat-b8ee9-default-rtdb.firebaseio.com/"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const database = getDatabase(app);
+    const storage = getStorage(app);
+
+    // DOM Elements
+    const messagesDiv = document.getElementById("messages");
+    const messageForm = document.getElementById("message-form");
+    const messageInput = document.getElementById("message-input");
+    const typingIndicator = document.getElementById("typing-indicator");
+    const emojiButton = document.getElementById("emoji-button");
+    const fileInput = document.getElementById("file-input");
+
+    const username = "User1"; // Replace with dynamic username logic
+    const messagesRef = ref(database, "messages");
+    const typingRef = ref(database, "typing");
+
+    // Listen for new messages
+    onValue(messagesRef, (snapshot) => {
+      messagesDiv.innerHTML = ""; // Clear the messages div
+      const messages = snapshot.val();
+      for (let id in messages) {
+        const message = messages[id];
+        const messageDiv = document.createElement("div");
+        messageDiv.innerHTML = `<strong>${message.username}:</strong> ${message.text || ""} ${
+          message.fileUrl ? `<a href="${message.fileUrl}" target="_blank">Download File</a>` : ""
+        } 
+<small>${message.timestamp || ""}</small>`;
+        if (message.username === username) {
+          const deleteButton = document.createElement("button");
+          deleteButton.textContent = "Delete";
+          deleteButton.addEventListener("click", () => {
+            remove(ref(database, `messages/${id}`));
+          });
+          messageDiv.appendChild(deleteButton);
+        }
+        messagesDiv.appendChild(messageDiv);
+      }
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    // Send a new message
+    messageForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const messageText = messageInput.value.trim();
+      if (messageText) {
+        const timestamp = new Date().toLocaleString();
+        push(messagesRef, { text: messageText, username: username, timestamp: timestamp });
+        messageInput.value = ""; // Clear the input field
+        set(typingRef, { username: username, typing: false });
+      }
+    });
+// Track typing status
+const typingRef = ref(database, "typing");
+messageInput.addEventListener("input", () => {
+  set(typingRef, { username: username, typing: messageInput.value.length > 0 });
+});
+
+// Listen for typing status
+onValue(typingRef, (snapshot) => {
+  const typingData = snapshot.val();
+  const typingIndicator = document.getElementById("typing-indicator");
+  if (typingData && typingData.typing && typingData.username !== username) {
+    typingIndicator.textContent = `${typingData.username} is typing...`;
+  } else {
+    typingIndicator.textContent = "";
+  }
+});
+
+// Add typing indicator to HTML
+const typingIndicator = document.createElement("div");
+typingIndicator.id = "typing-indicator";
+messagesDiv.parentNode.insertBefore(typingIndicator, messagesDiv.nextSibling);
+
+// Track typing status
+const typingRef = ref(database, "typing");
+messageInput.addEventListener("input", () => {
+  set(typingRef, { username: username, typing: messageInput.value.length > 0 });
+});
+
+// Listen for typing status
+onValue(typingRef, (snapshot) => {
+  const typingData = snapshot.val();
+  const typingIndicator = document.getElementById("typing-indicator");
+  if (typingData && typingData.typing && typingData.username !== username) {
+    typingIndicator.textContent = `${typingData.username} is typing...`;
+  } else {
+    typingIndicator.textContent = "";
+  }
+});
