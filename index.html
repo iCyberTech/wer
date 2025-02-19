@@ -63,7 +63,7 @@
     }
     #typing-indicator {
       font-size: 0.9em;
-      color: #888;
+      color: #555;
       margin-top: -10px;
       margin-bottom: 10px;
     }
@@ -76,17 +76,14 @@
     <form id="message-form">
       <input type="text" id="message-input" placeholder="Type your message..." required />
       <button type="submit" id="send-button">Send</button>
-      <button type="button" id="emoji-button">😀</button>
-      <input type="file" id="file-input" style="display: none;" />
     </form>
   </div>
 
   <!-- Firebase SDK -->
   <script type="module">
+    // Import Firebase SDK
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, set, update, remove } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
-    import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-storage.js";
-    import EmojiButton from "https://cdn.jsdelivr.net/npm/@joeattardi/emoji-button@4.6.2/dist/index.min.js";
+    import { getDatabase, ref, push, onValue, set } from "https://www.gstatic.com/firebasejs/11.3.1/firebase-database.js";
 
     // Firebase configuration
     const firebaseConfig = {
@@ -103,19 +100,19 @@
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     const database = getDatabase(app);
-    const storage = getStorage(app);
 
     // DOM Elements
     const messagesDiv = document.getElementById("messages");
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");
     const typingIndicator = document.getElementById("typing-indicator");
-    const emojiButton = document.getElementById("emoji-button");
-    const fileInput = document.getElementById("file-input");
 
-    const username = "User1"; // Replace with dynamic username logic
+    // Reference to the "messages" node in the database
     const messagesRef = ref(database, "messages");
-    const typingRef = ref(database, "typing");
+
+    // Reference to the "typing" node in the database
+    const username = "User1"; // Replace with dynamic username logic
+    const typingRef = ref(database, `typing/${username}`);
 
     // Listen for new messages
     onValue(messagesRef, (snapshot) => {
@@ -124,20 +121,10 @@
       for (let id in messages) {
         const message = messages[id];
         const messageDiv = document.createElement("div");
-        messageDiv.innerHTML = `<strong>${message.username}:</strong> ${message.text || ""} ${
-          message.fileUrl ? `<a href="${message.fileUrl}" target="_blank">Download File</a>` : ""
-        } 
-<small>${message.timestamp || ""}</small>`;
-        if (message.username === username) {
-          const deleteButton = document.createElement("button");
-          deleteButton.textContent = "Delete";
-          deleteButton.addEventListener("click", () => {
-            remove(ref(database, `messages/${id}`));
-          });
-          messageDiv.appendChild(deleteButton);
-        }
+        messageDiv.textContent = message.text;
         messagesDiv.appendChild(messageDiv);
       }
+      // Scroll to the bottom
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     });
 
@@ -146,51 +133,36 @@
       e.preventDefault();
       const messageText = messageInput.value.trim();
       if (messageText) {
-        const timestamp = new Date().toLocaleString();
-        push(messagesRef, { text: messageText, username: username, timestamp: timestamp });
+        push(messagesRef, { text: messageText });
         messageInput.value = ""; // Clear the input field
-        set(typingRef, { username: username, typing: false });
+        set(typingRef, false); // Stop typing status after sending a message
       }
     });
-// Track typing status
-const typingRef = ref(database, "typing");
-messageInput.addEventListener("input", () => {
-  set(typingRef, { username: username, typing: messageInput.value.length > 0 });
-});
 
-// Listen for typing status
-onValue(typingRef, (snapshot) => {
-  const typingData = snapshot.val();
-  const typingIndicator = document.getElementById("typing-indicator");
-  if (typingData && typingData.typing && typingData.username !== username) {
-    typingIndicator.textContent = `${typingData.username} is typing...`;
-  } else {
-    typingIndicator.textContent = "";
-  }
-});
+    // Track typing status
+    messageInput.addEventListener("input", () => {
+      if (messageInput.value.trim().length > 0) {
+        set(typingRef, true);
+      } else {
+        set(typingRef, false);
+      }
+    });
 
-// Add typing indicator to HTML
-const typingIndicator = document.createElement("div");
-typingIndicator.id = "typing-indicator";
-messagesDiv.parentNode.insertBefore(typingIndicator, messagesDiv.nextSibling);
-
-// Track typing status
-const typingRef = ref(database, "typing");
-messageInput.addEventListener("input", () => {
-  set(typingRef, { username: username, typing: messageInput.value.length > 0 });
-});
-
-// Listen for typing status
-onValue(typingRef, (snapshot) => {
-  const typingData = snapshot.val();
-  const typingIndicator = document.getElementById("typing-indicator");
-  if (typingData && typingData.typing && typingData.username !== username) {
-    typingIndicator.textContent = `${typingData.username} is typing...`;
-  } else {
-    typingIndicator.textContent = "";
-  }
-});
-
+    // Listen for typing status
+    onValue(ref(database, "typing"), (snapshot) => {
+      const typingData = snapshot.val();
+      let isSomeoneTyping = false;
+      for (let user in typingData) {
+        if (typingData[user] && user !== username) {
+          typingIndicator.textContent = `${user} is typing...`;
+          isSomeoneTyping = true;
+          break;
+        }
+      }
+      if (!isSomeoneTyping) {
+        typingIndicator.textContent = "";
+      }
+    });
   </script>
 </body>
 </html>
